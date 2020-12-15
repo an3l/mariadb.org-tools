@@ -1,0 +1,28 @@
+FROM mariadb:10.5-bionic
+LABEL maintainer="Anel Husakovic anel@mariadb.org"
+
+# Installing packages needed for the test
+RUN apt-get update -y && \
+    apt-get install -y libreoffice-base \
+      unixodbc \
+      unixodbc-dev \
+      odbcinst \
+      wget \
+      vim \
+      openssh-client
+
+RUN mkdir /odbc_driver
+WORKDIR /odbc_driver
+RUN wget https://downloads.mariadb.com/Connectors/odbc/connector-odbc-3.1.7/mariadb-connector-odbc-3.1.7-ga-debian-x86_64.tar.gz && \
+    tar -xzvf mariadb-connector-odbc-3.1.7-ga-debian-x86_64.tar.gz && \
+    wget https://raw.githubusercontent.com/MariaDB/mariadb.org-tools/master/anel/odbc_driver/MariaDB_odbc_data_source_template.ini && \
+    wget https://raw.githubusercontent.com/MariaDB/mariadb.org-tools/master/anel/odbc_driver/MariaDB_odbc_driver_template.ini
+
+RUN cp ./lib/libmaodbc.so /usr/lib/x86_64-linux-gnu
+RUN odbcinst -i -d -f MariaDB_odbc_driver_template.ini && \
+    odbcinst -i -s -h -f MariaDB_odbc_data_source_template.ini
+# Now create mariadb-net network and run:
+# xhost +local:docker &&
+# docker run --network mariadb-net --name mariadb-c2 \
+#-e MYSQL_USER=anel -e MYSQL_PASSWORD=anel -e MYSQL_DATABASE=libreoffice  -e MYSQL_ROOT_PASSWORD=root \
+#-e DISPLAY=$DISPLAY -v/tmp/.X11-unix:/tmp/.X11-unix -d <name of the image you created>
