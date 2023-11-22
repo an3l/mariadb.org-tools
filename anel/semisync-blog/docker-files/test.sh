@@ -30,20 +30,24 @@ if [ "$(systemctl is-active mariadb)" == "active" ]; then
     sudo systemctl stop mariadb
 fi
 
-# Check is primary started, if it is stoped it
-if [ "$(docker ps | grep $primary_name)" ]; then
+# Check if primary is started (silently); if it is stopped it!
+docker ps | grep -q $primary_name
+if [ ! $? ]; then
     echo "---------------Stoping/Removing the primary container $primary_name ---------------"
     docker stop "$primary_name"
 fi
-# Check is/are secondary/ies started, if it is/are stoped it/them
+
+# Check if secondary/ies is/are started; if it/they is/are stopped it/them!
 for i in $(seq $num_replicas)
 do
-    if [ "$(docker ps | grep "$secondary_name-$i")" ]; then
+    docker ps | grep "$secondary_name-$i"
+    if [ ! $? ]; then
         echo "---------------Stoping the secondary container $secondary_name-$i ---------------"
         docker stop "$secondary_name-$i"
     fi
     echo -e "\n"
 done
+
 # Clean log files
 echo "---------------Cleaning old logs ---------------"
 if [ -d "$dirprimary" ]; then
@@ -56,20 +60,28 @@ do
     fi
 done
 
-# config files stored in /etc/mysql/conf.d on a master
-# data files stored in /var/lib/mysql we will not use them 
-# log file stored in ( #-v ~/container-data/mariadb-log:/var/log/mysql )
+# Persistent volumes on master:
+# 1) config files are stored in /etc/mysql/mariadb.conf.d on a master
+# 2) log files are stored in /var/log/mysql; we may use them (created on container startup)
+# 3) Execute script from volume primaryinit
+# Data files are stored in /var/lib/mysql; we will not use them
 
 # ------- Create the primary server ------- #
 echo -e "\n---------------START THE PRIMARY ---------------\n"
 docker run -d --rm --name $primary_name \
--v $PWD/config-files/primarycnf:/etc/mysql/conf.d:z \
+-v "$PWD/config-files/primarycnf":/etc/mysql/mariadb.conf.d:z \
 -v "$PWD/$dirprimary":/var/log/mysql \
--v $PWD/primaryinit:/docker-entrypoint-initdb.d:z \
+-v "$PWD/primaryinit":/docker-entrypoint-initdb.d:z \
 -w /var/lib/mysql \
 -e MYSQL_ROOT_PASSWORD=secret \
 -e MYSQL_INITDB_SKIP_TZINFO=Y \
 mariadb:latest
+
+# Persistent volumes on replicas:
+# 1) config files are stored in /etc/mysql/mariadb.conf.d on a master
+# 2) log files are stored from /var/log/mysql; we may use them (created on container startup)
+# 3) Execute script from volume secondaryinit
+# Data files are stored in /var/lib/mysql; we will not use them
 
 # ------- Create the replica server ------- #
 echo -e "\n---------------START THE REPLICA ---------------\n"
@@ -77,17 +89,17 @@ for i in $(seq $num_replicas)
 do
     echo "Starting replica #$i"
     docker run -d --rm --name "$secondary_name-$i" \
-    -v $PWD/config-files/"secondary-$i":/etc/mysql/conf.d:z \
+    -v "$PWD/config-files/"secondary-$i"":/etc/mysql/mariadb.mariadb.conf.d:z \
     -v "$PWD/$dirsecondary-$i":/var/log/mysql \
-    -v $PWD/secondaryinit:/docker-entrypoint-initdb.d:z \
+    -v "$PWD/secondaryinit":/docker-entrypoint-initdb.d:z \
     -e MYSQL_ROOT_PASSWORD=secret \
     -e MYSQL_INITDB_SKIP_TZINFO=Y \
     mariadb:latest
     echo -e "\n"
 done
 
-# Check state
-echo -e "\n--------------- Check the state ---------------\n"
+# Check the states of containers
+echo -e "\n--------------- Check the container states ---------------\n"
 docker ps 
 echo -e "\n--------------- Check primary logs ---------------\n"
 docker logs $primary_name
@@ -101,10 +113,11 @@ done
 
 echo -e "\n--------------- Test primary ---------------\n"
 # Wait on primary
-: '
 # One could use this command, but since needs time for master status, it is not applicable
+: '
 if [ "$( docker container inspect -f '{{.State.Status}}' $container_name )" == "running" ]; then
 '
+# Instead of this we may use dolphie MariaDB(?)monitor
 replication_started=$(docker exec -it $primary_name mariadb -uroot -psecret -e "show master status;")
 replication_started=$?
 while [ $replication_started -eq 1 ]
@@ -127,7 +140,7 @@ for i in $(seq $num_replicas); do
     while [ $replication_started -eq 1 ]
     do
         #echo "replication_started: $replication_started"
-        output=$(docker exec -it "$secondary_name-$i" mariadb -uroot -psecret -e "show slave status\G;")
+        docker exec -it "$secondary_name-$i" mariadb -uroot -psecret -e "show slave status\G;"
         replication_started=$?
     done
 

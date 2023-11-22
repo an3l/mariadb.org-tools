@@ -1,0 +1,9 @@
+[mariadb]
+log-bin                         # enable binary loging
+server_id=3000                  # used to uniquely identify the server
+log-basename=my-mariadb         # used to be independent of to hostname changes (otherwise is in datadir/mysql)
+rpl_semi_sync_master_enabled=ON
+# gtid_strict_mode=1
+#binlog-format=MIXED            #default 
+
+

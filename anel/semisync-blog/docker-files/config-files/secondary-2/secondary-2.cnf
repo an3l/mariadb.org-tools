@@ -1,0 +1,7 @@
+[mariadb]
+server_id=3002                  # used to uniquely identify the server
+log-basename=my-mariadb         # used to be independent of to hostname changes (otherwise is in datadir/mysql)
+replicate_do_db=primary_db      # database to replicate
+rpl_semi_sync_slave_enabled=ON
+#binlog-format=MIXED            #default
+
