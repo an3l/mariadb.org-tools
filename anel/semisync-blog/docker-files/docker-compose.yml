@@ -1,0 +1,90 @@
+# run it with (V1)
+# $ docker-compose down --remove-orphans && docker image rm APP_CONTAINER_NAME  && docker image prune && docker-compose up --build --force-recreate
+# run it with (V2) (no dash) current version 2.21
+# docker compose down --remove-orphans
+# docker compose up --build --force-recreate
+version: "3.8"
+# We are using anchor and alias, or use "extension fields" (3.4+)
+x-common-variables: &common-variables
+  MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+  MYSQL_INITDB_SKIP_TZINFO: ${MYSQL_INITDB_SKIP_TZINFO}
+
+x-common-replica-volumes: &common-replica-volumes |-
+  ${REPLICA_init}:/docker-entrypoint-initdb.d:z
+
+x-common-attributes: &common-attributes
+  image: mariadb:10.6
+  environment: *common-variables
+  logging:
+    driver: journald
+  healthcheck:
+    test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+    start_period: 1m
+    start_interval: 10s
+    interval: 1m
+    timeout: 5s
+    retries: 2
+  networks:
+    - backend
+
+services:
+  primary:
+    <<: *common-attributes
+    container_name: ${PRIMARY_name}
+    ports:
+      - ${PRIMARY_port}:3306
+    volumes:
+      - ${PRIMARY_configuration_file}:/etc/mysql/mariadb.conf.d/mariadb-primary.cnf:z
+      - ${PRIMARY_init}:/docker-entrypoint-initdb.d:z
+      - ${PRIMARY_logs}:/var/log/mysql
+    logging:
+      options:
+        tag: "${PRIMARY_log_tag}"
+
+  replica1:
+    <<: *common-attributes
+    container_name: ${REPLICA1_name}
+    ports:
+      - ${REPLICA1_port}:3306
+    volumes:
+    - *common-replica-volumes
+    - ${REPLICA1_configuration_file}:/etc/mysql/mariadb.conf.d/mariadb-primary.cnf:z
+    - ${REPLICA1_logs}:/var/log/mysql
+    logging:
+      options:
+        tag: "${REPLICA_log_tag}"
+    depends_on:
+      - primary
+
+  replica2:
+    <<: *common-attributes
+    container_name: ${REPLICA2_name}
+    ports:
+      - ${REPLICA2_port}:3306
+    volumes:
+      - *common-replica-volumes
+      - ${REPLICA2_configuration_file}:/etc/mysql/mariadb.conf.d/mariadb-primary.cnf:z
+      - ${REPLICA2_logs}:/var/log/mysql
+    logging:
+      options:
+        tag: "${REPLICA_log_tag}"
+    depends_on:
+      - replica1
+    # Ignored if used replicas tag
+    # container_name: ${PRIMARY_name}
+    # ports:
+    #   - ${REPLICA_port}:3306
+    # deploy:
+    #   mode: replicated
+    #   replicas: 2
+    #   endpoint_mode: vip
+
+volumes:
+  staticfiles:
+
+networks:
+  backend:
+
+
+# https://stackoverflow.com/questions/64405332/docker-compose-environment-variable-loading-env-but-not-env-file-from-compose
+# https://stackoverflow.com/questions/24090177/how-to-merge-yaml-arrays
