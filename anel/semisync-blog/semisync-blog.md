@@ -48,26 +48,8 @@ flowchart LR
 ```
 The problem with this type of replication is potential data loss in case if primary goes
 down, before the replica gets the committed changes.
-```mermaid
-flowchart LR
-   subgraph async["Standard (asynchronous) replication - primary failure"]
-        direction LR
-        %% Definitions
-        app[("application")]
-        primary[("MariaDB\nPrimary")]
-        rep1[("MariaDB\nReplica 1")]
-        rep2[("MariaDB\nReplica 2")]
+![Alt text](image-3.png)
 
-        %% Connections
-        primary-.-x|commit ⛔|rep1 & rep2
-        app-->|write ✅|primary
-        primary-->|ack ✅|app
-        %% Style color
-        linkStyle 0,1 stroke:#321be0,stroke-width:4px,color:red;
-        linkStyle 2 stroke:#03f0fc,stroke-width:4px,color:green;
-        linkStyle 3 stroke:#fc036b,stroke-width:4px,color:blue;
-    end
-```
 To overcome this type of errors, there is semi-sync replication.
 
 In this blog we will visualise following:
@@ -206,27 +188,7 @@ that event has been successfully received by replica, as can be seen from pictur
 Before confirming the client request, at least one replica has to confirm receipment of data changes (IO thread),
 not that actually replica applied those data changes.
 
-```mermaid
-flowchart LR
-   subgraph async["Semi-sync replication"]
-        direction LR
-        %% Definitions
-        app[("application")]
-        primary[("MariaDB\nPrimary")]
-        rep1[("MariaDB\nReplica 1")]
-        rep2[("MariaDB\nReplica 2")]
-
-        %% Connections
-        primary-.->|commit ⏳|rep1 & rep2
-        app-->|write ✅|primary
-        primary-->|ack ✅|app
-        rep1-.->|ack 📝✅|primary
-        %% Style color
-        linkStyle 0,1 stroke:#321be0,stroke-width:4px,color:red;
-        linkStyle 2 stroke:#03f0fc,stroke-width:4px,color:green;
-        linkStyle 3 stroke:#fc036b,stroke-width:4px,color:blue;
-    end
-```
+![Alt text](image-4.png)
 
 To configure the semi-sync replication we need to stop replicase and set environment variables on primary and replicas.
 On primary set `rpl_semi_sync_master_enabled` and on replicas set `rpl_semi_sync_slave_enabled`.
