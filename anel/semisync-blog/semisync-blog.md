@@ -343,8 +343,8 @@ Note over Binlog-dump-1,SQL-2: Semi-sync replication transaction cycle
 ```
 
 ## <a name='Semi-syncdemoexamplewithcontainers'></a>5. Semi-sync demo example with containers 
-- In this example we will be using stateless application, just as a proof of concept. LINK todo
-- If statefull example is needed, consider using persistent volumes as I explained in this example.LINK todo
+- In this example we will be using stateless application, just as a proof of concept. @TODO (push to https://github.com/MariaDB/mariadb.org-tools/tree/master/anel after review of blog post)
+- If statefull example is needed, consider using persistent volumes as I explained in this example.LINK @TODO (push to https://github.com/MariaDB/mariadb.org-tools/tree/master/anel with statefull example, after review of blog post)
 - We will be using GTIDs, that are enabled automatically.
   This way replication will start at the position of the last GTID replicated to replica (seen from `gtid_slave_pos` system variable).
 
@@ -365,25 +365,62 @@ addabd306bb4   mariadb:lts    "docker-entrypoint.s…"   2 minutes ago   Up 2 mi
 
 - Check logs
 
-|     #| primary   | replica 1  | replica 2  |
-|:----:|:---------:|:----------:|:----------:|
-|1.| "mariadb-primary    2023-11-23 12:21:47 0 [Note] Semi-sync replication initialized for transactions."| | |
-|2.| "mariadb-primary    2023-11-23 12:21:47 0 [Note] Semi-sync replication enabled on the master."       | | |
-|3.| | "mariadb-replica-1  2023-11-23 12:21:58 4 [Note] Master connection name: ''  Master_info_file: 'master.info'  Relay_info_file: 'relay-log.info'"| |
-|4.| | | mariadb-replica-2 2023-11-23 12:21:58 4 [Note] Master connection name: ''  Master_info_file: 'master.info'  Relay_info_file: 'relay-log.info'|
-|5.| | mariadb-replica-1   2023-11-23 12:21:58 4 [Note] 'CHANGE MASTER TO executed'. Previous state master_host='', master_port='3306', master_log_file='', master_log_pos='4'. New state master_host='mariadb-primary', master_port='3306', master_log_file='', master_log_pos='4'.| |
-|6.| | mariadb-replica-1  2023-11-23 12:21:58 4 [Note] Previous Using_Gtid=Slave_Pos. New Using_Gtid=Slave_Pos| |
-|7.| | | mariadb-replica-2  2023-11-23 12:21:58 4 [Note] 'CHANGE MASTER TO executed'. Previous state master_host='', master_port='3306', master_log_file='', master_log_pos='4'. New state master_host='mariadb-primary', master_port='3306', master_log_file='', master_log_pos='4'.|
-|8.| | | mariadb-replica-2  2023-11-23 12:21:58 4 [Note] Previous Using_Gtid=Slave_Pos. New Using_Gtid=Slave_Pos|
-|9.| | mariadb-replica-1  2023-11-23 12:21:58 5 [Note] Slave I/O thread: Start semi-sync replication to master 'repl@mariadb-primary:3306' in log '' at position 4| |
-|10.| | mariadb-replica-1  2023-11-23 12:21:58 6 [Note] Slave SQL thread initialized, starting replication in log 'FIRST' at position 4, relay log './mariadb-relay-bin.000001' position: 4; GTID position ''| |
-|11.| | mariadb-replica-1  2023-11-23 12:21:58 5 [Note] Slave I/O thread: connected to master 'repl@mariadb-primary:3306',replication starts at GTID position ''| |
-|12.| mariadb-primary    2023-11-23 12:21:58 7 [Note] Start binlog_dump to slave_server(2), pos(, 4), using_gtid(1), gtid('')| | |
-|13.| mariadb-primary    2023-11-23 12:21:58 7 [Note] Start semi-sync binlog_dump to slave (server_id: 2), pos(./mariadb-bin.000001, 4)| | |
-|14.| | | mariadb-replica-2  2023-11-23 12:21:58 5 [Note] Slave I/O thread: Start semi-sync replication to master 'repl@mariadb-primary:3306' in log '' at position 4|
-|15.| | | mariadb-replica-2  2023-11-23 12:21:58 6 [Note] Slave SQL thread initialized, starting replication in log 'FIRST' at position 4, relay log './mariadb-relay-bin.000001' position: 4; GTID position ''|
-|16.| | | mariadb-replica-2  2023-11-23 12:21:58 5 [Note] Slave I/O thread: connected to master 'repl@mariadb-primary:3306',replication starts at GTID position ''|
-|17.| mariadb-primary    2023-11-23 12:21:58 8 [Note] Start binlog_dump to slave_server(3), pos(, 4), using_gtid(1), gtid('')| | |
+```mermaid
+sequenceDiagram
+    %%{
+    init: {
+        'theme': 'base',
+        'themeVariables': {
+            'primaryColor': '#947feb',
+            'primaryTextColor': '#292626',
+            'primaryBorderColor': '#7C0000',
+            'lineColor': '#F8B229',
+            'secondaryColor': '#006100',
+            'tertiaryColor': '#fff',
+            'sequenceNumberColor':'#F7AFAD'
+        }
+    }
+    }%%
+
+    box Primary
+        participant p as Primary
+    end
+
+    box Replica 1
+        participant r1 as Replica 1
+    end
+
+    box Replica 2
+        participant r2 as Replica 2
+    end
+    autonumber
+    Note over p: Semisync started
+    p-->p: "mariadb-primary    2023-11-23 12:21:47 0 [Note] Semi-sync replication initialized for transactions."
+    p-->p: "mariadb-primary    2023-11-23 12:21:47 0 [Note] Semi-sync replication enabled on the master."
+
+    Note over r1,r2: Execute CHANGE MASTER on r1 & r2
+    r1-->r1: "mariadb-replica-1  2023-11-23 12:21:58 4 [Note] Master connection name: ''  Master_info_file: 'master.info'  Relay_info_file: 'relay-log.info'"
+    r2-->r2: "mariadb-replica-2 2023-11-23 12:21:58 4 [Note] Master connection name: ''  Master_info_file: 'master.info'  Relay_info_file: 'relay-log.info'"
+    r1-->r1: "mariadb-replica-1   2023-11-23 12:21:58 4 [Note] 'CHANGE MASTER TO executed'. Previous state master_host='', master_port='3306',master_log_file='', master_log_pos='4'. New state master_host='mariadb-primary', master_port='3306', master_log_file='', master_log_pos='4'."
+    r1-->r1: "mariadb-replica-1  2023-11-23 12:21:58 4 [Note] Previous Using_Gtid=Slave_Pos. New Using_Gtid=Slave_Pos"
+    r2-->r2: "mariadb-replica-2  2023-11-23 12:21:58 4 [Note] 'CHANGE MASTER TO executed'. Previous state master_host='', master_port='3306', master_log_file='', master_log_pos='4'. New state master_host='mariadb-primary', master_port='3306', master_log_file='', master_log_pos='4'."
+    r2-->r2: "mariadb-replica-2  2023-11-23 12:21:58 4 [Note] Previous Using_Gtid=Slave_Pos. New Using_Gtid=Slave_Pos"
+
+    Note over r1: Threads started on replica 1 with semisync enabled
+    r1-->r1: mariadb-replica-1  2023-11-23 12:21:58 5 [Note] Slave I/O thread: Start semi-sync replication to master 'repl@mariadb-primary:3306' in log '' at position 4
+    r1-->r1: "mariadb-replica-1  2023-11-23 12:21:58 6 [Note] Slave SQL thread initialized, starting replication in log 'FIRST' at position 4, relay log './mariadb-relay-bin.000001' position: 4 GTID position ''"
+    r1-->r1: mariadb-replica-1  2023-11-23 12:21:58 5 [Note] Slave I/O thread: connected to master 'repl@mariadb-primary:3306',replication starts at GTID position ''
+    Note over p: Binlog thread dumped events to r1
+    p-->p: mariadb-primary    2023-11-23 12:21:58 7 [Note] Start binlog_dump to slave_server(2), pos(, 4), using_gtid(1), gtid('')
+    p-->p: mariadb-primary    2023-11-23 12:21:58 7 [Note] Start semi-sync binlog_dump to slave (server_id: 2), pos(./mariadb-bin.000001, 4)
+
+    Note over r2: Threads started on replica 2 with semisync enabled
+    r2-->r2: mariadb-replica-2  2023-11-23 12:21:58 5 [Note] Slave I/O thread: Start semi-sync replication to master 'repl@mariadb-primary:3306' in log '' at position 4
+    r2-->r2: "mariadb-replica-2  2023-11-23 12:21:58 6 [Note] Slave SQL thread initialized, starting replication in log 'FIRST' at position 4, relay log './mariadb-relay-bin.000001' position: 4 GTID position ''"
+    r2-->r2: mariadb-replica-2  2023-11-23 12:21:58 5 [Note] Slave I/O thread: connected to master 'repl@mariadb-primary:3306',replication starts at GTID position ''
+    Note over p: Binlog thread dumped events to r2
+    p-->p: mariadb-primary    2023-11-23 12:21:58 8 [Note] Start binlog_dump to slave_server(3), pos(, 4), using_gtid(1), gtid('')
+```
 
 
 #### <a name='Checkprimary'></a>5.1.1 Check primary
@@ -712,7 +749,7 @@ pip install dolphie
 
 
 ## Conclusion and further readings
-Special thanks to Brandon & (others) for reviewing this blog post.
+Special thanks to @TODO "ask Brandon, Kristian, staff" for reviewing this blog post.
 If you come across any problems in this blog, with the design, or edge cases that don’t work as expected, please let us know. You are welcome to chat about it on Zulip. As always you can use our JIRA bug/feature request in the MDEV project for any bug/feature request you may encounter.
 
 - This blog closes [MDBF](https://jira.mariadb.org/browse/MDBF-573). (this will not be part of the blog)
