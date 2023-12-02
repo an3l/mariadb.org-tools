@@ -1,21 +1,22 @@
 # MariaDB semi-sync replication using containers
 ## Anel Husakovic,
-## Zenica, Novembar, 2023
+**Zenica, Novembar, 2023**
 
 <!-- vscode-markdown-toc -->
-* [1. Standard replication configuration](#Standardreplicationconfiguration)
-* [2. Standard replication transaction](#Standardreplicationtransaction)
-* [3. Semi-sync replication configuration](#Semi-syncreplicationconfiguration)
-* [4. Semi-sync replication transaction example](#Semi-syncreplicationtransactionexample)
-* [5. Semi-sync demo example with containers](#Semi-syncdemoexamplewithcontainers)
-	* [5.1 Check containers](#Checkcontainers)
-		* [5.1.1 Check primary](#Checkprimary)
-		* [5.1.2 Check binary logs](#Checkbinarylogs)
-		* [5.1.3 Check replica[s]](#Checkreplicas)
-	* [5.2 Start replicating](#Startreplicating)
-		* [5.2.1 Create table](#Createtable)
-		* [5.2.2 Insert data](#Insertdata)
-		* [5.2.3 Check using GUI Dolphie](#CheckusingGUIDolphie)
+* [1. Semi-sync demo example with containers](#Semi-syncdemoexamplewithcontainers)
+	* [1.1 Check containers](#Checkcontainers)
+		* [1.1.1 Check primary](#Checkprimary)
+		* [1.1.2 Check binary logs](#Checkbinarylogs)
+		* [1.1.3 Check replica[s]](#Checkreplicas)
+	* [1.2 Start replicating](#Startreplicating)
+		* [1.2.1 Create table](#Createtable)
+		* [1.2.2 Insert data](#Insertdata)
+		* [1.2.3 Check using GUI Dolphie](#CheckusingGUIDolphie)
+* [2. Standard replication configuration](#Standardreplicationconfiguration)
+* [3. Standard replication transaction](#Standardreplicationtransaction)
+* [4. Semi-sync replication configuration](#Semi-syncreplicationconfiguration)
+* [5. Semi-sync replication transaction example](#Semi-syncreplicationtransactionexample)
+* [Conclusion and further readings](#Conclusionandfurtherreadings)
 
 <!-- vscode-markdown-toc-config
 	numbering=false
@@ -50,26 +51,7 @@ The problem with this type of replication is potential data loss in case if prim
 down. Transactions, that are commited on the primary, are not being send to replicas
 and the replica doesn't commit the changes. Failover from primary to replica in this case,
 may lead to missing transactions relative to the primary.
-```mermaid
-flowchart LR
-   subgraph async["Standard (asynchronous) replication - primary failure"]
-        direction LR
-        %% Definitions
-        app(("application"))
-        primary[("MariaDB\nPrimary")]
-        rep1[("MariaDB\nReplica 1")]
-        rep2[("MariaDB\nReplica 2")]
-
-        %% Connections
-        primary ~~~|events ⛔|rep1 & rep2
-        app-->|write ✅|primary
-        primary-->|ack ✅|app
-        %% Style color
-        %% linkStyle 0,1 stroke:#321be0,stroke-width:4px,color:red;
-        linkStyle 2 stroke:#03f0fc,stroke-width:4px,color:green;
-        linkStyle 3 stroke:#fc036b,stroke-width:4px,color:blue;
-    end
-```
+![Alt text](async_no_events.png)
 
 To overcome this type of errors, there is semi-sync replication and fully sync replication.
 While in fully sync replication all replicas have to verify single transaction before primary 
@@ -79,28 +61,7 @@ fully-sync replication.
 Compared to the async replication, semi-sync replication provides improved data integrity,
 because when primary receives acknowledgment from at least one replica and commit the changes,
 we can be sure data exists at least in 2 places.
-```mermaid
-flowchart LR
-   subgraph async["Semi-sync replication"]
-        direction LR
-        %% Definitions
-        app(("application"))
-        primary[("MariaDB\nPrimary")]
-        rep1[("MariaDB\nReplica 1")]
-        rep2[("MariaDB\nReplica 2")]
-
-        %% Connections
-        primary--->|events|rep1 & rep2
-        app-->|write ✅|primary
-        primary-->|ack ✅|app
-        rep1-.->|ack 📝✅|primary
-        primary-.->|"wait ack ⏳\ncommit T1 ✅"|primary
-        %% Style color
-        linkStyle 0,1 stroke:#321be0,stroke-width:4px,color:red;
-        linkStyle 2 stroke:#03f0fc,stroke-width:4px,color:green;
-        linkStyle 3 stroke:#fc036b,stroke-width:4px,color:blue;
-    end
-```
+![Alt text](semisync.png)
 
 In this blog we first explore:
 1. how to setup semi-sync replication.
@@ -114,7 +75,8 @@ After that, for more curious readers we the will visualise in the form of graphs
 
 ## <a name='Semi-syncdemoexamplewithcontainers'></a>1. Semi-sync demo example with containers 
 - In this example we will be using stateless application, just as a proof of concept.
-- There is the [Docker compose](https://github.com/MariaDB/mariadb-docker/blob/master/examples/compose-replication-semisync.yml) file in our mariadb-docker repository.
+- There is the [Docker compose](https://github.com/MariaDB/mariadb-docker/blob/master/examples/compose-replication-semisync.yml) file in our mariadb-docker repository,
+  where is the main point to enable semi-sync on primary with ` --rpl_semi_sync_master_enabled` and enable semi-sync on replicas with `--rpl_semi_sync_slave_enabled`.
 - We will be using GTIDs, that are enabled automatically.
   This way replication will start at the position of the last GTID replicated to replica (seen from `gtid_slave_pos` system variable).
 
@@ -696,8 +658,20 @@ Only one replica is needed to confirm, that it has received and logged the event
 ```mermaid
 sequenceDiagram
     autonumber
-    %%{init: {'theme': 'dark'} }%%
-
+    %%{
+    init: {
+        'theme': 'base',
+        'themeVariables': {
+            'primaryColor': '#947feb',
+            'primaryTextColor': '#292626',
+            'primaryBorderColor': '#7C0000',
+            'lineColor': '#F8B229',
+            'secondaryColor': '#006100',
+            'tertiaryColor': '#fff',
+            'sequenceNumberColor':'#F7AFAD'
+        }
+    }
+    }%%
     box Primary threads
         participant Binlog-dump-1
         participant Binlog-dump-2
@@ -815,7 +789,7 @@ Note over Binlog-dump-1,SQL-2: Semi-sync replication transaction cycle
     %% if needed mscgen can be used
 ```
 
-## Conclusion and further readings
+## <a name='Conclusionandfurtherreadings'></a>Conclusion and further readings
 Special thanks Brandon Nesterenko, Daniel Black and Ian Gilfillan  for reviewing this blog post.
 TODO Say a word about [MDEV-21322](https://jira.mariadb.org/browse/MDEV-21322) ?
 If you come across any problems in this blog, with the design, or edge cases that don’t work as expected, please let us know. You are welcome to chat about it on Zulip. As always you can use our JIRA bug/feature request in the MDEV project for any bug/feature request you may encounter.
