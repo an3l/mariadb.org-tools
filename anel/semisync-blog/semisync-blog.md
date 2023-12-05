@@ -53,7 +53,7 @@ and the replica doesn't commit the changes. Failover from primary to replica in 
 may lead to missing transactions relative to the primary.
 ![Alt text](async_no_events.png)
 
-To overcome this type of errors, there is semi-sync replication and fully sync replication.
+To overcome this type of errors, there is semi-sync replication and fully sync replication, that we plan to implement eventually as [MDEV-19140](https://jira.mariadb.org/browse/MDEV-19140), or to use [Galera](https://mariadb.com/kb/en/galera-cluster/).
 While in fully sync replication all replicas have to verify single transaction before primary 
 returns to the session that executed the transaction in semi-sync type of replication at least one replica needs
 to acknowledge transaction event that is transmitted successfully, that gives faster replication compared to the
@@ -707,14 +707,14 @@ Note over Binlog-dump-1,SQL-2: Semi-sync replication transaction cycle
     Note over Cp: **Semisync**: User connection is suspended until ACK is received.
     activate Cp
 %% Semi-sync binlogdump-ACK
-    Note over Binlog-dump-1, ack1: **Semisync**: Notify ACK thread to expect ACK
+    Note over Binlog-dump-1, ack1: **Semisync**: Notify ACK thread to accept ACK
     par **Semisync**: Notify ACK
         activate Binlog-dump-1
-        Binlog-dump-1->>ack1: Set notification to except ACK from replica 1.
+        Binlog-dump-1->>ack1: Set notification to accept ACK from replica 1.
         deactivate Binlog-dump-1
 
         activate Binlog-dump-2
-        Binlog-dump-2->>ack1: Set notification to except ACK from replica 1.
+        Binlog-dump-2->>ack1: Set notification to accept ACK from replica 2.
         deactivate Binlog-dump-2
     end
     par Dump binlog to r1
@@ -734,20 +734,18 @@ Note over Binlog-dump-1,SQL-2: Semi-sync replication transaction cycle
             activate IO-1
             IO-1->>ack1: **Semisync**:Transaction event received on R1
             deactivate IO-1
+%% ack says to client thread that ack is received
             activate ack1
-            ack1->>Binlog-dump-1: **Semisync**: Report to binlog r1
-            Note over ack1, Binlog-dump-1: **Semisync**: Ready for sending new events to r1 & r2
+            ack1->>Cp: **Semisync**: Unsuspend
             deactivate ack1
-%% binlog says to client thread that ack is received
-            activate Binlog-dump-1
-            Binlog-dump-1->>Cp: **Semisync**: Unsuspend
             Cp->>Cp: **Semisync** Ready for new transactins
-            deactivate Binlog-dump-1
             deactivate Cp
+            Note over ack1, Binlog-dump-1: **Semisync**: Ready for sending new events to r1 & r2
         end
         opt Transaction not received - timeout
             Note over IO-1, ack1: **Semisync** ACK not received from R1
             ack1->>Binlog-dump-1: Switch to asynchronous replication.
+            ack1->>Cp: **Semisync**: Unsuspend
             Note left of Binlog-dump-1: Rpl_semi_sync_master_status =OFF
         end
     and Write relaylog r2
@@ -791,7 +789,8 @@ Note over Binlog-dump-1,SQL-2: Semi-sync replication transaction cycle
 
 ## <a name='Conclusionandfurtherreadings'></a>Conclusion and further readings
 Special thanks Brandon Nesterenko, Daniel Black and Ian Gilfillan  for reviewing this blog post.
-TODO Say a word about [MDEV-21322](https://jira.mariadb.org/browse/MDEV-21322) ?
+To get more information about state of the replicas one can use `show replica hosts`, that with [MDEV-21322](https://jira.mariadb.org/browse/MDEV-21322) will
+have more information for semi-sync states.
 If you come across any problems in this blog, with the design, or edge cases that don’t work as expected, please let us know. You are welcome to chat about it on Zulip. As always you can use our JIRA bug/feature request in the MDEV project for any bug/feature request you may encounter.
 
 - This blog closes [MDBF](https://jira.mariadb.org/browse/MDBF-573). (this will not be part of the blog)
