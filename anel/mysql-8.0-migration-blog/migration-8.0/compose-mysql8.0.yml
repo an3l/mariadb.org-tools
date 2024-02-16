@@ -1,0 +1,81 @@
+version: "3"
+
+services:
+  mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+    container_name: ${MYSQL_name}
+    image: mysql:8.3.0
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 20s
+      timeout: 20s
+      retries: 2
+      start_period: 0s
+    volumes:
+      # Preload files for MySQL data
+      - ./mysql:/docker-entrypoint-initdb.d:z
+      # We have to save MySQL volume that will be used in upgrade
+      - dbdata:/var/lib/mysql
+    networks:
+      - backend
+
+# Sidecar for dumping files
+  mariadb-dump:
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_DB: ${DB_DATABASE}
+      MYSQL_CONT_NAME: ${MYSQL_name}
+    container_name: ${MARIADB_DUMP_name}
+    image: mariadb:lts
+    depends_on:
+     mysql:
+       condition: service_healthy
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 20s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - mysqldump:/etc/dump/
+      - ./dump-mysql.sh:/docker-entrypoint-initdb.d/dump-mysql.sh
+    networks:
+      - backend
+
+# Sidecar for insert dump file
+  mariadb-migrated-from-mysql8:
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_DB: ${DB_DATABASE}
+    container_name: ${MARIADB_MIGRATED_name}
+    image: mariadb:lts
+    depends_on:
+     mariadb-dump:
+       condition: service_healthy
+      #  restart: true
+    volumes:
+      - mysqldump:/etc/dump/
+      - ./migrate-mariadb.sh:/docker-entrypoint-initdb.d/migrate-mariadb.sh
+    networks:
+      - backend
+
+volumes:
+  dbdata: {}
+  # sudo chown -R 999:999 ${PWD}/dump-data # on host before running this file
+  mysqldump:
+    driver: local
+    driver_opts:
+      type: none
+      device: "${PWD}/dump-data"
+      o: bind
+
+networks:
+  backend:
