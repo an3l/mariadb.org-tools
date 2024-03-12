@@ -1,0 +1,67 @@
+version: '3'
+services:
+    server1:
+        image: mariadb:10.6
+        ports:
+            - 3000:3000
+        container_name: server1
+        environment:
+            MYSQL_ALLOW_EMPTY_PASSWORD: Y
+            MYSQL_INITDB_SKIP_TZINFO: Y
+        volumes:
+            - ./sql/:/docker-entrypoint-initdb.d
+            - ./my.cnf.d/:/etc/my.cnf.d
+            - ./certs/:/certs/
+        command: mysqld --defaults-extra-file=/etc/my.cnf.d/extra.cnf --log-bin=binlog --binlog-format=ROW --server-id=3000 --port=3000 --log-slave-updates --wsrep_node_address=server1
+    server2:
+        image: mariadb:10.6
+        container_name: server2
+        ports:
+            - 3001:3001
+        environment:
+            MYSQL_ALLOW_EMPTY_PASSWORD: Y
+            MYSQL_INITDB_SKIP_TZINFO: Y
+        volumes:
+            - ./sql/:/docker-entrypoint-initdb.d
+            - ./my.cnf.d/:/etc/my.cnf.d
+            - ./certs/:/certs/
+        command: mysqld --defaults-extra-file=/etc/my.cnf.d/extra.cnf --log-bin=binlog --binlog-format=ROW --server-id=3001 --port=3001 --log-slave-updates --wsrep_node_address=server2
+    server3:
+        image: mariadb:10.6
+        container_name: server3
+        ports:
+            - 3002:3002
+        environment:
+            MYSQL_ALLOW_EMPTY_PASSWORD: Y
+            MYSQL_INITDB_SKIP_TZINFO: Y
+        volumes:
+            - ./sql/:/docker-entrypoint-initdb.d
+            - ./my.cnf.d/:/etc/my.cnf.d
+            - ./certs/:/certs/
+        command: mysqld --defaults-extra-file=/etc/my.cnf.d/extra.cnf --log-bin=binlog --binlog-format=ROW --server-id=3002 --port=3002 --log-slave-updates --wsrep_node_address=server3
+    server4:
+        image: mariadb:10.6
+        container_name: server4
+        ports:
+            - 3003:3003
+        environment:
+            MYSQL_ALLOW_EMPTY_PASSWORD: Y
+            MYSQL_INITDB_SKIP_TZINFO: Y
+        volumes:
+            - ./sql/:/docker-entrypoint-initdb.d
+            - ./my.cnf.d/:/etc/my.cnf.d
+            - ./certs/:/certs/
+        command: mysqld --defaults-extra-file=/etc/my.cnf.d/extra.cnf --log-bin=binlog --binlog-format=ROW --server-id=3003 --port=3003 --log-slave-updates --wsrep_node_address=server4
+    bootstrap:
+        image: mariadb:10.6
+        container_name: bootstrap
+        ports:
+            - 3004:3004
+        environment:
+            MYSQL_ALLOW_EMPTY_PASSWORD: Y
+            MYSQL_INITDB_SKIP_TZINFO: Y
+        volumes:
+            - ./sql/:/docker-entrypoint-initdb.d
+            - ./my.cnf.d/:/etc/my.cnf.d
+            - ./certs/:/certs/
+        command: mysqld --defaults-extra-file=/etc/my.cnf.d/extra.cnf --log-bin=binlog --binlog-format=ROW --server-id=3004 --port=3004 --log-slave-updates  --wsrep-new-cluster  --wsrep_node_address=bootstrap
